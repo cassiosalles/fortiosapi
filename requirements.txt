@@ -1,6 +1,7 @@
 pexpect
 requests
-paramiko
+netmiko
 nose
 packaging
 oyaml
+six
