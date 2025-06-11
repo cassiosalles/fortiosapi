@@ -36,14 +36,9 @@ from collections import OrderedDict
 
 import netmiko
 import requests
-import six.moves.urllib as urllib
+import urllib.parse
 
 from .exceptions import InvalidLicense, NotLogged
-
-try:
-    import urllib.parse as urlencoding
-except:
-    import urllib as urlencoding
 
 try:  # Python 2.7+
     from logging import NullHandler
@@ -213,7 +208,7 @@ class FortiOSAPI:
             # may happen if logout is called
         self._session.verify = verify
 
-        if cert is not None:
+        if cert != None:
             self._session.cert = cert
         # set the default at 12 see request doc for details http://docs.python-requests.org/en/master/user/advanced/
         self.timeout = timeout
@@ -286,12 +281,12 @@ class FortiOSAPI:
 
         self._session.verify = verify
 
-        if cert is not None:
+        if cert != None:
             self._session.cert = cert
         # set the default at 12 see request doc for details http://docs.python-requests.org/en/master/user/advanced/
         self.timeout = timeout
 
-        LOG.debug("host is %s", host)
+        LOG.debug(f"host is {host}")
         resp_lic = self.get("system", "status", vdom=vdom)
         LOG.debug(f"response system/status : {resp_lic}")
         try:
@@ -368,7 +363,7 @@ class FortiOSAPI:
         # return builded URL
         url_postfix = "/api/v2/cmdb/" + path + "/" + name
         if mkey:
-            url_postfix = url_postfix + "/" + urlencoding.quote(str(mkey), safe="")
+            url_postfix = url_postfix + "/" + urllib.parse.quote(str(mkey), safe="")
         if vdom:
             LOG.debug("vdom is: %s", vdom)
             if vdom == "global":
@@ -384,7 +379,7 @@ class FortiOSAPI:
         # return builded URL
         url_postfix = "/api/v2/monitor/" + path + "/" + name
         if mkey:
-            url_postfix = url_postfix + "/" + urlencoding.quote(str(mkey), safe="")
+            url_postfix = url_postfix + "/" + urllib.parse.quote(str(mkey), safe="")
         if vdom:
             LOG.debug("vdom is: %s", vdom)
             if vdom == "global":
@@ -482,13 +477,13 @@ class FortiOSAPI:
 
     def schema(self, path, name, vdom=None):
         # vdom or global is managed in cmdb_url
-        if vdom is None:
+        if vdom == None:
             url = self.cmdb_url(path, name) + "?action=schema"
         else:
             url = self.cmdb_url(path, name, vdom=vdom) + "&action=schema"
 
         res = self._session.get(url, timeout=self.timeout)
-        if res.status_code is 200:
+        if res.status_code == 200:
             if vdom == "global":
                 return json.loads(res.content.decode("utf-8"))[0]["results"]
             else:
@@ -499,7 +494,7 @@ class FortiOSAPI:
     def get_name_path_dict(self, vdom=None):
         # return builded URL
         url_postfix = "/api/v2/cmdb/"
-        if vdom is not None:
+        if vdom != None:
             url_postfix += "?vdom=" + vdom + "&action=schema"
         else:
             url_postfix += "?action=schema"
@@ -703,9 +698,11 @@ class FortiOSAPI:
     @staticmethod
     def ssh(cmds, host, user, password=None, port=22):
         """
-        Send a multi line string via ssh to the fortigate
+        Send a command or a set of commands via ssh to the fortigate
 
-        :param cmds: multi line string with the Fortigate config cli
+        Better to use Netmiko for this
+
+        :param cmds: string or list of commands with the Fortigate config cli
         :param host: ip/hostname of the fortigate interface
         :param user/password: fortigate admin user and password
         :param port: port 22 if not set or a port on which fortigate listen for ssh commands.
@@ -721,34 +718,23 @@ class FortiOSAPI:
             "device_type": "fortinet",
         }
 
-        # client = netmiko.ConnectHandler(**device)
-        # LOG.debug(f"ssh login to  {host}:{port} ")
-        # # commands is a multiline string using the ''' string ''' format
-        # try:
-        #     client.send_config_set()
-        # except:
-        #     LOG.debug("exec_command failed")
-        #     raise subprocess.CalledProcessError(
-        #         returncode=retcode, cmd=cmds, output=output
-        #     )
-        # LOG.debug("ssh command in:  %s out: %s err: %s ", stdin, stdout, stderr)
-        # retcode = stdout.channel.recv_exit_status()
-        # LOG.debug("Paramiko return code : %s ", retcode)
-        # client.close()  # @TODO re-use connections
-        # if retcode > 0:
-        #     output = stderr.read().strip()
-        #     raise subprocess.CalledProcessError(
-        #         returncode=retcode, cmd=cmds, output=output
-        #     )
-        # results = stdout.read()
-        # LOG.debug(f"ssh cmd {cmds} | out: {results} | err: {retcode} ")
-        # # fortigate ssh send errors on stdout so checking that
-        # if "Command fail. Return code" in str(results):
-        #     # TODO fill retcode with the output of the FGT
-        #     raise subprocess.CalledProcessError(
-        #         returncode=retcode, cmd=cmds, output=results
-        #     )
-        # return "".join(str(results)), "".join(str(stderr.read().strip()))
+        client = netmiko.ConnectHandler(**device)
+        LOG.debug(f"ssh login to  {host}:{port} ")
+        # commands is a string or a list
+        try:
+            if type(cmds) == list:
+                output = client.send_config_set(cmds)
+
+            else:
+                output = client.send_command(cmds)
+
+            client.disconnect()  # @TODO re-use connections
+        except:
+            LOG.debug("exec_command failed")
+            raise subprocess.CalledProcessError(returncode=0, cmd=cmds, output=output)
+        LOG.debug(f"ssh cmd {cmds} | out: {output} ")
+
+        return output
 
     def license(self, vdom="root"):
         """
@@ -795,7 +781,7 @@ class FortiOSAPI:
         """
 
         yamltreel3 = copy.deepcopy(yamltree)
-        LOG.debug("initial yamltreel3 is %s ", yamltreel3)
+        LOG.debug(f"initial yamltreel3 is {yamltreel3} ")
         for name in yamltree.copy():
             for path in yamltree[name]:
                 for k in yamltree[name][path].copy():
